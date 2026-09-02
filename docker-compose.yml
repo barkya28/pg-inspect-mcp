@@ -1,0 +1,10 @@
+# Local Postgres for developing against the server:
+#   docker compose up -d
+#   export DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
