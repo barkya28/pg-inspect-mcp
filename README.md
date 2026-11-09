@@ -75,3 +75,10 @@ Covers identifier injection shapes, stacked statements, writing CTEs (`WITH x AS
 ## License
 
 MIT
+
+
+### Foreign-key relationships
+
+Use `list_foreign_keys(table, schema="public")` to inspect foreign-key
+constraints, including composite-key column order and referenced tables.
+The tool reads PostgreSQL system catalogs and does not modify data.

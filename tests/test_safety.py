@@ -73,3 +73,36 @@ def test_connection_options_are_read_only():
 
     src = inspect.getsource(server.get_conn)
     assert "default_transaction_read_only=on" in src
+
+
+class TestForeignKeyInspection:
+    def test_parameterized_catalog_query(self, monkeypatch):
+        from pg_inspect_mcp import server
+
+        captured = {}
+
+        def fake_rows(query, params=()):
+            captured["query"] = query
+            captured["params"] = params
+            return "[]"
+
+        monkeypatch.setattr(server, "_rows", fake_rows)
+        assert server._foreign_keys("orders", "sales") == "[]"
+        assert captured["params"] == ("sales", "orders")
+        assert "unnest(con.conkey, con.confkey)" in captured["query"]
+        assert "ORDER BY keys.ordinality" in captured["query"]
+        assert "con.contype = 'f'" in captured["query"]
+
+    @pytest.mark.parametrize("schema,table", [
+        ("public; DROP SCHEMA public", "orders"),
+        ("public", "orders; DROP TABLE orders"),
+    ])
+    def test_rejects_invalid_identifiers(self, monkeypatch, schema, table):
+        from pg_inspect_mcp import server
+
+        def unexpected_query(*args, **kwargs):
+            pytest.fail("Invalid identifier reached the database layer")
+
+        monkeypatch.setattr(server, "_rows", unexpected_query)
+        with pytest.raises(ValueError):
+            server._foreign_keys(table, schema)

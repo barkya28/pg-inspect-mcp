@@ -153,6 +153,48 @@ def list_indexes(table: str, schema: str = "public") -> str:
     )
 
 
+
+def _foreign_keys(table: str, schema: str = "public") -> str:
+    """Fetch foreign keys, including ordered columns for composite keys."""
+    validate_identifier(schema, "schema")
+    validate_identifier(table, "table")
+    return _rows(
+        """
+        SELECT con.conname AS constraint_name,
+               array_agg(src_att.attname ORDER BY keys.ordinality) AS columns,
+               ref_ns.nspname AS referenced_schema,
+               ref_rel.relname AS referenced_table,
+               array_agg(ref_att.attname ORDER BY keys.ordinality) AS referenced_columns,
+               con.confupdtype AS on_update_code,
+               con.confdeltype AS on_delete_code
+        FROM pg_constraint con
+        JOIN pg_class src_rel ON src_rel.oid = con.conrelid
+        JOIN pg_namespace src_ns ON src_ns.oid = src_rel.relnamespace
+        JOIN pg_class ref_rel ON ref_rel.oid = con.confrelid
+        JOIN pg_namespace ref_ns ON ref_ns.oid = ref_rel.relnamespace
+        CROSS JOIN LATERAL unnest(con.conkey, con.confkey)
+            WITH ORDINALITY AS keys(src_attnum, ref_attnum, ordinality)
+        JOIN pg_attribute src_att
+            ON src_att.attrelid = con.conrelid AND src_att.attnum = keys.src_attnum
+        JOIN pg_attribute ref_att
+            ON ref_att.attrelid = con.confrelid AND ref_att.attnum = keys.ref_attnum
+        WHERE con.contype = 'f'
+          AND src_ns.nspname = %s
+          AND src_rel.relname = %s
+        GROUP BY con.oid, con.conname, ref_ns.nspname, ref_rel.relname,
+                 con.confupdtype, con.confdeltype
+        ORDER BY con.conname
+        """,
+        (schema, table),
+    )
+
+
+@server.tool()
+def list_foreign_keys(table: str, schema: str = "public") -> str:
+    """List foreign keys and referenced columns for a table."""
+    return _foreign_keys(table, schema)
+
+
 @server.tool()
 def table_stats(table: str, schema: str = "public") -> str:
     """Table size on disk, index size, and live/dead tuple estimates."""
