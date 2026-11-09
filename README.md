@@ -75,3 +75,19 @@ Covers identifier injection shapes, stacked statements, writing CTEs (`WITH x AS
 ## License
 
 MIT
+
+
+### Query timeout
+
+By default, PostgreSQL cancels statements taking longer than **5 seconds**.
+Set `PG_INSPECT_STATEMENT_TIMEOUT_MS` to override this (integer milliseconds,
+1–600000; maximum 10 minutes). The timeout is enforced by PostgreSQL on each
+connection using `statement_timeout`, alongside the existing read-only
+transaction setting. For example:
+
+```bash
+export PG_INSPECT_STATEMENT_TIMEOUT_MS=10000
+```
+
+Invalid timeout values cause a configuration error instead of silently
+disabling the limit.
