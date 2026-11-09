@@ -64,6 +64,18 @@ def validate_readonly_query(query: str) -> str:
     return query.rstrip().rstrip(";")
 
 
+def statement_timeout_ms() -> int:
+    """Read a bounded PostgreSQL statement timeout from the environment."""
+    raw = os.environ.get("PG_INSPECT_STATEMENT_TIMEOUT_MS", "5000")
+    try:
+        timeout = int(raw)
+    except ValueError as exc:
+        raise ValueError("PG_INSPECT_STATEMENT_TIMEOUT_MS must be an integer") from exc
+    if not 1 <= timeout <= 600000:
+        raise ValueError("PG_INSPECT_STATEMENT_TIMEOUT_MS must be between 1 and 600000")
+    return timeout
+
+
 def get_conn() -> psycopg.Connection:
     """Open a connection that Postgres itself treats as read-only."""
     dsn = os.environ.get("DATABASE_URL")
@@ -71,7 +83,10 @@ def get_conn() -> psycopg.Connection:
         raise RuntimeError("DATABASE_URL is not set")
     conn = psycopg.connect(
         dsn,
-        options="-c default_transaction_read_only=on",
+        options=(
+            "-c default_transaction_read_only=on "
+            f"-c statement_timeout={statement_timeout_ms()}"
+        ),
         row_factory=dict_row,
         autocommit=True,
     )

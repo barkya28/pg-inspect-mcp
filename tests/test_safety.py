@@ -73,3 +73,46 @@ def test_connection_options_are_read_only():
 
     src = inspect.getsource(server.get_conn)
     assert "default_transaction_read_only=on" in src
+
+
+class TestStatementTimeout:
+    @pytest.mark.parametrize("value,expected", [
+        (None, 5000),
+        ("1", 1),
+        ("600000", 600000),
+        ("2500", 2500),
+    ])
+    def test_valid_timeout(self, monkeypatch, value, expected):
+        from pg_inspect_mcp import server
+
+        if value is None:
+            monkeypatch.delenv("PG_INSPECT_STATEMENT_TIMEOUT_MS", raising=False)
+        else:
+            monkeypatch.setenv("PG_INSPECT_STATEMENT_TIMEOUT_MS", value)
+        assert server.statement_timeout_ms() == expected
+
+    @pytest.mark.parametrize("value", ["", "0", "-1", "600001", "abc", "1.5"])
+    def test_invalid_timeout(self, monkeypatch, value):
+        from pg_inspect_mcp import server
+
+        monkeypatch.setenv("PG_INSPECT_STATEMENT_TIMEOUT_MS", value)
+        with pytest.raises(ValueError, match="PG_INSPECT_STATEMENT_TIMEOUT_MS"):
+            server.statement_timeout_ms()
+
+    def test_connect_enforces_read_only_and_timeout(self, monkeypatch):
+        from pg_inspect_mcp import server
+
+        captured = {}
+        monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/test")
+        monkeypatch.setenv("PG_INSPECT_STATEMENT_TIMEOUT_MS", "1200")
+
+        def fake_connect(dsn, **kwargs):
+            captured.update(dsn=dsn, **kwargs)
+            return object()
+
+        monkeypatch.setattr(server.psycopg, "connect", fake_connect)
+        server.get_conn()
+        assert captured["dsn"] == "postgresql://localhost/test"
+        assert "default_transaction_read_only=on" in captured["options"]
+        assert "statement_timeout=1200" in captured["options"]
+        assert captured["autocommit"] is True
